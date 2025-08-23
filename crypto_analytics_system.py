@@ -69,22 +69,17 @@ def create_bingx_signature(query_string, secret_key):
     ).hexdigest()
 
 def get_bingx_spot_klines(symbol, interval, limit=100):
-    """
-    DIRECT BingX Spot API call for klines/OHLCV data
-    No CCXT - Direct REST API
-    """
+    """FIXED: BingX returns 8 columns, not 12"""
     try:
-        # BingX spot symbol format: BTC-USDT (not BTC/USDT)
         bingx_symbol = f"{symbol}-USDT"
         
         params = {
             'symbol': bingx_symbol,
-            'interval': interval,  # '30m' or '1h'
+            'interval': interval,
             'limit': limit
         }
         
         url = f"{BINGX_BASE_URL}{BINGX_SPOT_KLINES}"
-        
         response = requests.get(url, params=params, timeout=15)
         
         if response.status_code == 200:
@@ -92,15 +87,13 @@ def get_bingx_spot_klines(symbol, interval, limit=100):
             
             if data.get('code') == 0 and data.get('data'):
                 klines = data['data']
-                if len(klines) >= 30:  # Minimum required
-                    # Convert to DataFrame
+                if len(klines) >= 30:
+                    # FIXED: Use correct 8 columns for BingX
                     df = pd.DataFrame(klines, columns=[
-                        'Open_time', 'Open', 'High', 'Low', 'Close', 'Volume',
-                        'Close_time', 'Quote_volume', 'Count', 'Taker_buy_volume',
-                        'Taker_buy_quote_volume', 'Ignore'
+                        'Open_time', 'Open', 'High', 'Low', 'Close', 'Volume', 'Close_time', 'Quote_volume'
                     ])
                     
-                    # Keep only OHLCV columns and convert types
+                    # Keep only OHLCV columns
                     df = df[['Open_time', 'Open', 'High', 'Low', 'Close', 'Volume']].copy()
                     df['timestamp'] = pd.to_datetime(df['Open_time'], unit='ms')
                     df = df[['timestamp', 'Open', 'High', 'Low', 'Close', 'Volume']].copy()
@@ -113,19 +106,9 @@ def get_bingx_spot_klines(symbol, interval, limit=100):
                     df = df.dropna()
                     
                     return df if len(df) >= 30 else None
-            else:
-                error_msg = data.get('msg', 'Unknown error')
-                print(f"  ⚠️ BingX spot API error for {symbol}: {error_msg}")
-                return None
-        else:
-            print(f"  ⚠️ BingX spot HTTP error for {symbol}: {response.status_code}")
-            return None
-            
-    except requests.RequestException as e:
-        print(f"  🌐 BingX spot network error for {symbol}: {str(e)[:40]}")
         return None
     except Exception as e:
-        print(f"  ❌ BingX spot unexpected error for {symbol}: {str(e)[:40]}")
+        print(f"  ❌ BingX spot error for {symbol}: {str(e)[:40]}")
         return None
 
 def get_bingx_futures_klines(symbol, interval, limit=100):
