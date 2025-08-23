@@ -21,7 +21,8 @@ jobs:
           
       - name: 📦 Install Dependencies
         run: |
-          pip install --no-cache-dir pandas numpy requests ccxt pathlib
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
           
       - name: 🚀 Run Crypto Analytics System - Full Integration
         env:
