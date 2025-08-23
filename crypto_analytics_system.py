@@ -69,15 +69,10 @@ def create_bingx_signature(query_string, secret_key):
     ).hexdigest()
 
 def get_bingx_spot_klines(symbol, interval, limit=100):
-    """FIXED: BingX returns 8 columns, not 12"""
+    """ADAPTIVE: Handle any BingX response format automatically"""
     try:
         bingx_symbol = f"{symbol}-USDT"
-        
-        params = {
-            'symbol': bingx_symbol,
-            'interval': interval,
-            'limit': limit
-        }
+        params = {'symbol': bingx_symbol, 'interval': interval, 'limit': limit}
         
         url = f"{BINGX_BASE_URL}{BINGX_SPOT_KLINES}"
         response = requests.get(url, params=params, timeout=15)
@@ -88,17 +83,25 @@ def get_bingx_spot_klines(symbol, interval, limit=100):
             if data.get('code') == 0 and data.get('data'):
                 klines = data['data']
                 if len(klines) >= 30:
-                    # FIXED: Use correct 8 columns for BingX
-                    df = pd.DataFrame(klines, columns=[
-                        'Open_time', 'Open', 'High', 'Low', 'Close', 'Volume', 'Close_time', 'Quote_volume'
-                    ])
                     
-                    # Keep only OHLCV columns
-                    df = df[['Open_time', 'Open', 'High', 'Low', 'Close', 'Volume']].copy()
+                    # ADAPTIVE: Auto-detect column count and use standard OHLCV mapping
+                    df = pd.DataFrame(klines)
+                    
+                    # Standard mapping: first 6 columns are usually [time, O, H, L, C, V]
+                    df.columns = [f'col_{i}' for i in range(len(df.columns))]
+                    df = df.rename(columns={
+                        'col_0': 'Open_time',
+                        'col_1': 'Open', 
+                        'col_2': 'High',
+                        'col_3': 'Low',
+                        'col_4': 'Close',
+                        'col_5': 'Volume'
+                    })
+                    
+                    # Create timestamp and clean data
                     df['timestamp'] = pd.to_datetime(df['Open_time'], unit='ms')
                     df = df[['timestamp', 'Open', 'High', 'Low', 'Close', 'Volume']].copy()
                     
-                    # Convert to numeric
                     for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
                         df[col] = pd.to_numeric(df[col], errors='coerce')
                     
@@ -106,6 +109,7 @@ def get_bingx_spot_klines(symbol, interval, limit=100):
                     df = df.dropna()
                     
                     return df if len(df) >= 30 else None
+                    
         return None
     except Exception as e:
         print(f"  ❌ BingX spot error for {symbol}: {str(e)[:40]}")
