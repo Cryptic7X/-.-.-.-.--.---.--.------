@@ -2,6 +2,7 @@
 Crypto Analytics System - Complete Integration
 CoinGecko for Market Cap Filtering + BingX for OHLCV Data
 Advanced Dual-Tier TrendPulse Scanner with Heikin Ashi Analysis
+ENHANCED: Dual-Market Support (Spot + USD-M Perpetual Futures)
 """
 
 import pandas as pd
@@ -20,6 +21,12 @@ COIN_CACHE_FILE = Path("analytics_coin_cache.json")
 ALERT_CACHE_FILE = Path("analytics_alerts.json")
 BLOCKED_COINS_FILE = Path("blocked_coins.txt")
 CACHE_DURATION_MINUTES = 30
+
+# BingX-specific skip list for problematic symbols
+BINGX_SKIP_SYMBOLS = {
+    'WHYPE',  # Not listed on BingX
+    # Add more problematic symbols here as needed
+}
 
 def load_alert_cache():
     if ALERT_CACHE_FILE.exists():
@@ -40,6 +47,29 @@ def load_blocked_coins():
     else:
         print("📝 No blocked coins file found")
         return set()
+
+def should_skip_symbol(symbol):
+    """Check if symbol should be skipped for BingX"""
+    return symbol.upper() in BINGX_SKIP_SYMBOLS
+
+def get_available_markets(symbol, exchange):
+    """Check what markets are available for a symbol on BingX"""
+    if should_skip_symbol(symbol):
+        return {'spot': False, 'futures': False, 'spot_symbol': None, 'futures_symbol': None}
+    
+    spot_symbol = f"{symbol}/USDT"
+    futures_symbol = f"{symbol}/USDT:USDT"
+    
+    try:
+        available = {
+            'spot': spot_symbol in exchange.markets and exchange.markets[spot_symbol].get('active', False),
+            'futures': futures_symbol in exchange.markets and exchange.markets[futures_symbol].get('active', False),
+            'spot_symbol': spot_symbol if spot_symbol in exchange.markets else None,
+            'futures_symbol': futures_symbol if futures_symbol in exchange.markets else None
+        }
+        return available
+    except Exception as e:
+        return {'spot': False, 'futures': False, 'spot_symbol': None, 'futures_symbol': None}
 
 def convert_to_heikin_ashi(df):
     """Convert regular OHLC data to Heikin Ashi candles - FIXED VERSION"""
@@ -310,45 +340,74 @@ class CoinGeckoDataManager:
         }
 
 def get_bingx_ohlcv_data(symbol, bingx_exchange):
-    """Get OHLCV data from BingX for both 30M and 1H timeframes"""
+    """
+    ENHANCED: Get OHLCV data from BingX for both 30M and 1H timeframes
+    Now supports both SPOT and USD-M Perpetual Futures markets
+    """
     data = {}
     
+    if should_skip_symbol(symbol):
+        print(f"  🚫 Skipping {symbol}: In skip list")
+        return data
+    
     try:
-        # Convert symbol format for BingX: BTC -> BTC/USDT
-        bingx_symbol = f"{symbol}/USDT"
+        # Get available markets for this symbol
+        markets = get_available_markets(symbol, bingx_exchange)
         
         # Try to get 30M data for STANDARD tier
-        try:
-            ohlcv_30m = bingx_exchange.fetch_ohlcv(bingx_symbol, '30m', limit=100)
-            if ohlcv_30m and len(ohlcv_30m) >= 30:
-                df_30m = pd.DataFrame(ohlcv_30m, 
-                                    columns=['timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'])
-                df_30m['timestamp'] = pd.to_datetime(df_30m['timestamp'], unit='ms')
-                df_30m.set_index('timestamp', inplace=True)
-                df_30m = df_30m.dropna()  # Clean data
-                if len(df_30m) >= 30:
-                    data['30M'] = df_30m
-        except Exception as e:
-            print(f"  ⚠️ BingX 30M error for {symbol}: {str(e)[:30]}")
-        
-        # Try to get 1H data for HIGH RISK tier
-        try:
-            ohlcv_1h = bingx_exchange.fetch_ohlcv(bingx_symbol, '1h', limit=50)
-            if ohlcv_1h and len(ohlcv_1h) >= 30:
-                df_1h = pd.DataFrame(ohlcv_1h,
-                                   columns=['timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'])
-                df_1h['timestamp'] = pd.to_datetime(df_1h['timestamp'], unit='ms')
-                df_1h.set_index('timestamp', inplace=True)
-                df_1h = df_1h.dropna()  # Clean data
-                if len(df_1h) >= 30:
-                    data['1H'] = df_1h
-        except Exception as e:
-            print(f"  ⚠️ BingX 1H error for {symbol}: {str(e)[:30]}")
+        for timeframe, tf_label in [('30m', '30M'), ('1h', '1H')]:
+            limit = 100 if timeframe == '30m' else 50
+            min_candles = 30
             
+            # Try spot market first
+            if markets['spot'] and markets['spot_symbol']:
+                try:
+                    bingx_exchange.options['defaultType'] = 'spot'
+                    ohlcv = bingx_exchange.fetch_ohlcv(markets['spot_symbol'], timeframe, limit=limit)
+                    
+                    if ohlcv and len(ohlcv) >= min_candles:
+                        df = pd.DataFrame(ohlcv, 
+                                        columns=['timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'])
+                        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+                        df.set_index('timestamp', inplace=True)
+                        df = df.dropna()
+                        
+                        if len(df) >= min_candles:
+                            data[tf_label] = df
+                            continue  # Successfully got spot data, move to next timeframe
+                            
+                except Exception as e:
+                    print(f"  ⚠️ BingX {tf_label} spot error for {symbol}: {str(e)[:40]}")
+            
+            # Fallback to futures market if spot failed or unavailable
+            if markets['futures'] and markets['futures_symbol'] and tf_label not in data:
+                try:
+                    bingx_exchange.options['defaultType'] = 'swap'
+                    ohlcv = bingx_exchange.fetch_ohlcv(markets['futures_symbol'], timeframe, limit=limit)
+                    
+                    if ohlcv and len(ohlcv) >= min_candles:
+                        df = pd.DataFrame(ohlcv,
+                                        columns=['timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'])
+                        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+                        df.set_index('timestamp', inplace=True)
+                        df = df.dropna()
+                        
+                        if len(df) >= min_candles:
+                            data[tf_label] = df
+                            print(f"  💎 {symbol} {tf_label}: Using futures data (spot unavailable)")
+                            
+                except Exception as e:
+                    print(f"  ⚠️ BingX {tf_label} futures error for {symbol}: {str(e)[:40]}")
+            
+            # If neither spot nor futures worked for this timeframe
+            if tf_label not in data:
+                market_info = "no markets" if not markets['spot'] and not markets['futures'] else "data fetch failed"
+                print(f"  ❌ BingX {tf_label} error for {symbol}: {market_info}")
+        
         return data
         
     except Exception as e:
-        print(f"  ❌ BingX connection error for {symbol}")
+        print(f"  ❌ BingX connection error for {symbol}: {str(e)[:50]}")
         return {}
 
 def get_ist_time_12h():
@@ -478,12 +537,15 @@ def send_crypto_analytics_alert(coin, analysis, tier_type, cache):
         print(f"❌ Telegram error for {tier_type}: {e}")
 
 def analyze_coin_with_bingx(coin, tier_type, analyzer, bingx_exchange, blocked_coins):
-    """Analyze single coin using BingX data with comprehensive error handling"""
+    """
+    ENHANCED: Analyze single coin using BingX data with comprehensive error handling
+    Now supports both spot and futures market fallback
+    """
     try:
         if coin['symbol'].upper() in blocked_coins:
             return None, f"🚫 BLOCKED: {coin['symbol']}"
         
-        # Get OHLCV data from BingX
+        # Get OHLCV data from BingX (now with dual-market support)
         data = get_bingx_ohlcv_data(coin['symbol'], bingx_exchange)
         
         timeframe = '1H' if tier_type == 'HIGH_RISK' else '30M'
@@ -511,14 +573,15 @@ def analyze_coin_with_bingx(coin, tier_type, analyzer, bingx_exchange, blocked_c
         return None, f"❌ BingX error {coin['symbol']}: {str(e)[:50]}"
 
 def main():
-    """Main Crypto Analytics System execution - Complete Integration"""
+    """Main Crypto Analytics System execution - Complete Integration with Dual-Market Support"""
     print("🚀 CRYPTO ANALYTICS SYSTEM - COINGECKO + BINGX INTEGRATION")
     print("=" * 80)
     print("🔥 Advanced Dual-Tier TrendPulse Scanner")
     print("📊 CoinGecko: Market cap filtering & coin discovery")
-    print("🏢 BingX: Comprehensive OHLCV data via CCXT")
+    print("🏢 BingX: Dual-market OHLCV data (Spot + USD-M Perpetual Futures)")
     print("📈 HIGH RISK: 1H Heikin Ashi • STANDARD: 30M Heikin Ashi")
     print("💰 Current Price Tracking • Smart Deduplication")
+    print("🔄 Automatic Spot/Futures Fallback • Enhanced Market Coverage")
     print("=" * 80)
     
     start_time = datetime.utcnow()
@@ -538,9 +601,11 @@ def main():
             'options': {'defaultType': 'spot'},
         })
         
-        # Test BingX connection
+        # Test BingX connection and load markets
         bingx_exchange.load_markets()
-        print(f"✅ BingX connected: {len(bingx_exchange.markets)} markets available")
+        spot_markets = len([m for m in bingx_exchange.markets.values() if m.get('type') == 'spot'])
+        futures_markets = len([m for m in bingx_exchange.markets.values() if m.get('type') == 'swap'])
+        print(f"✅ BingX connected: {spot_markets} spot + {futures_markets} futures markets")
         
     except Exception as e:
         print(f"❌ BingX connection failed: {e}")
@@ -561,7 +626,10 @@ def main():
         return
     
     total_coins = len(high_risk_coins) + len(standard_coins)
-    print(f"📊 Analyzing {total_coins} coins with BingX OHLCV data...")
+    skip_count = len([c for c in high_risk_coins + standard_coins if should_skip_symbol(c['symbol'])])
+    print(f"📊 Analyzing {total_coins} coins with BingX dual-market OHLCV data...")
+    if skip_count > 0:
+        print(f"🚫 Skipping {skip_count} problematic symbols")
     print("=" * 80)
     
     # Parallel processing for both tiers
@@ -581,16 +649,16 @@ def main():
         ]
         
         # Collect HIGH RISK results
-        print("🔥 HIGH RISK TIER ANALYSIS (1H Heikin Ashi via BingX):")
-        print("-" * 50)
+        print("🔥 HIGH RISK TIER ANALYSIS (1H Heikin Ashi via BingX Dual-Market):")
+        print("-" * 60)
         for i, future in enumerate(high_risk_futures, 1):
             result, log = future.result()
             print(f"[{i}/{len(high_risk_futures)}] {log}")
             if result:
                 all_results.append(result)
         
-        print("\n📊 STANDARD TIER ANALYSIS (30M Heikin Ashi via BingX):")
-        print("-" * 50)
+        print("\n📊 STANDARD TIER ANALYSIS (30M Heikin Ashi via BingX Dual-Market):")
+        print("-" * 60)
         # Collect STANDARD results
         for i, future in enumerate(standard_futures, 1):
             result, log = future.result()
@@ -627,7 +695,8 @@ def main():
     print(f"   🏢 BingX Requests: ~{len(high_risk_coins + standard_coins) * 2}")
     print(f"   💰 Monthly CoinGecko Est.: {monthly_calls_coingecko:.0f} calls")
     print(f"   🏢 Monthly BingX Est.: {monthly_calls_bingx:.0f} calls")
-    print(f"   ✅ System Status: {'FULL DATA COVERAGE ACHIEVED' if all_results or total_coins > 400 else 'PARTIAL COVERAGE'}")
+    print(f"   🔄 Dual-Market Coverage: Spot + USD-M Perpetual Futures")
+    print(f"   ✅ System Status: {'ENHANCED DUAL-MARKET COVERAGE ACHIEVED' if all_results or total_coins > 400 else 'PARTIAL COVERAGE'}")
 
 if __name__ == "__main__":
     main()
