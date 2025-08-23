@@ -1,0 +1,41 @@
+name: 🚀 Crypto Analytics System - CoinGecko + BingX Integration
+
+on:
+  schedule:
+    - cron: '*/8 * * * *'    # Every 8 minutes - Optimized timing
+  workflow_dispatch:         # Manual trigger
+  
+jobs:
+  crypto-analytics-integrated:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+        
+      - name: 🐍 Setup Python Environment
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
+      - name: 📦 Install Dependencies
+        run: |
+          pip install --no-cache-dir pandas numpy requests ccxt pathlib
+          
+      - name: 🚀 Run Crypto Analytics System - Full Integration
+        env:
+          COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
+          BINGX_API_KEY: ${{ secrets.BINGX_API_KEY }}
+          BINGX_SECRET_KEY: ${{ secrets.BINGX_SECRET_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          HIGH_RISK_CHAT_ID: ${{ secrets.HIGH_RISK_CHAT_ID }}
+        run: |
+          echo "🚀 Starting Crypto Analytics System - Full Integration"
+          echo "📊 Data Sources: CoinGecko (filtering) + BingX (OHLCV)"
+          echo "🔥 HIGH RISK: 1H Heikin Ashi Analysis"
+          echo "📈 STANDARD: 30M Heikin Ashi Analysis"
+          echo "⏰ Scan Time: $(date)"
+          python crypto_analytics_system.py
+          echo "✅ Crypto Analytics System Complete - No More Missing Data!"
