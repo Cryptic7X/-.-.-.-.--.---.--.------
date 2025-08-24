@@ -405,6 +405,7 @@ class TrendPulseAnalyzer:
                 bullish_cross = (wt1_prev <= wt2_prev) and (wt1_curr > wt2_curr)
                 bearish_cross = (wt1_prev >= wt2_prev) and (wt1_curr < wt2_curr)
                 
+                               # In analyze_heikin_ashi(), when appending signals:
                 if bullish_cross and oversold:
                     signals.append({
                         'type': 'buy',
@@ -412,7 +413,8 @@ class TrendPulseAnalyzer:
                         'wt1': wt1_curr,
                         'wt2': wt2_curr,
                         'strength': abs(wt1_curr) + abs(wt2_curr),
-                        'tier': tier_type
+                        'tier': tier_type,
+                        'candle_timestamp': ha_df.index[-(i+1)].strftime('%Y-%m-%dT%H:%M')  # Add this
                     })
                     
                 elif bearish_cross and overbought:
@@ -422,8 +424,10 @@ class TrendPulseAnalyzer:
                         'wt1': wt1_curr,
                         'wt2': wt2_curr,
                         'strength': abs(wt1_curr) + abs(wt2_curr),
-                        'tier': tier_type
+                        'tier': tier_type,
+                        'candle_timestamp': ha_df.index[-(i+1)].strftime('%Y-%m-%dT%H:%M')  # Add this
                     })
+
             
             has_signal = len(signals) > 0
             signal_type = signals[0]['type'] if signals else 'none'
@@ -645,7 +649,8 @@ def send_crypto_analytics_alert(coin, analysis, tier_type, cache):
     
     # Cache key
     # NEW: dedupe by closed candle timestamp
-    candle_ts = ha_df.index[-2].strftime('%Y-%m-%dT%H:%M')
+    # NEW (uses timestamp from signal):
+    candle_ts = signal.get('candle_timestamp', time_str)
     key = f"{tier_type}_{coin['symbol']}_{action}_{candle_ts}"
     if key in cache:
         return
