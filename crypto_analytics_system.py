@@ -567,29 +567,39 @@ def get_ist_time_12h():
     return ist.strftime('%I:%M %p %d-%m-%Y'), ist.strftime('%A, %d %B %Y')
 
 def get_reliable_tradingview_url(symbol):
-    """Get reliable TradingView chart URL - Your exact implementation"""
+    """
+    FIXED: Get working TradingView chart URL with exchanges that have reliable data
+    Prioritizes exchanges with comprehensive TradingView integration
+    """
     base_symbol = symbol.upper()
     
-    # Priority order: BingX -> Binance -> Coinbase -> Kraken
+    # Priority order: Best TradingView integrations first
     exchanges = [
-        ('BINGX', f"{base_symbol}USDT"),
-        ('BINANCE', f"{base_symbol}USDT"),
-        ('COINBASE', f"{base_symbol}USD"),
-        ('KRAKEN', f"{base_symbol}USD"),
-        ('BYBIT', f"{base_symbol}USDT")
+        ('BINANCE', f"{base_symbol}USDT"),      # Most reliable
+        ('BYBIT', f"{base_symbol}USDT"),        # Excellent coverage  
+        ('COINBASE', f"{base_symbol}USD"),      # Great for major coins
+        ('KRAKEN', f"{base_symbol}USD"),        # Reliable data
+        ('OKX', f"{base_symbol}USDT"),          # Good coverage
+        ('BINGX', f"{base_symbol}USDT.P"),      # Futures only (fallback)
     ]
     
     for exchange, pair in exchanges:
-        url = f"https://www.tradingview.com/chart/?symbol={exchange}%3A{pair}"
+        # Test if the chart loads properly
+        tv_symbol = f"{exchange}:{pair}"
+        url = f"https://www.tradingview.com/chart/?symbol={tv_symbol}"
+        
         try:
-            resp = requests.head(url, timeout=3, allow_redirects=True)
+            # Quick test to verify the URL works
+            resp = requests.head(url, timeout=2, allow_redirects=True)
             if resp.status_code == 200:
                 return url, exchange
         except:
             continue
     
-    # Final fallback
-    return f"https://www.tradingview.com/chart/?symbol={base_symbol}USDT", "Generic"
+    # Ultimate fallback - Binance is most reliable
+    fallback_url = f"https://www.tradingview.com/chart/?symbol=BINANCE:{base_symbol}USDT"
+    return fallback_url, "BINANCE"
+
 
 def send_crypto_analytics_alert(coin, analysis, tier_type, cache):
     """Send enhanced alerts with current price - Your Exact Implementation"""
