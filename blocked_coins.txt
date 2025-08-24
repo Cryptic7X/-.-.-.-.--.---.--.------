@@ -1,0 +1,67 @@
+# ===========================================
+# CRYPTO ANALYTICS - BLOCKED COINS LIST
+# ===========================================
+# Add one coin symbol per line
+# Lines starting with # are comments
+
+
+
+
+# Stablecoins
+USDT
+USDC
+DAI
+UBTC
+EURC
+$MBG
+WETH
+SBUSDT
+XUSD
+USTC
+USDC.E
+EURCV
+BSC-USD
+WBT
+BGB
+WETH
+USD1
+SUSDS
+KHYPE
+USDT0
+WBNB
+WETH
+BTC.B
+RLUSD
+JITOSOL
+WSTETH
+
+# Meme coins (too volatile)
+NFT
+AMP
+SNEK
+TROLL
+GOMINING
+REAL
+XYO
+VRA
+IKA
+GAME
+AITECH
+EGL1
+NEON
+C
+AIOT
+DONKEY
+CXT
+SANTOS
+USOL
+ETHDYDX
+BAS
+THBILL
+ACA
+
+# Problematic symbols
+WHYPE
+
+
+# Add more coins here as needed...
