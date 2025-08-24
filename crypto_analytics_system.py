@@ -381,19 +381,16 @@ class TrendPulseAnalyzer:
             wt1_values = wt1.values
             wt2_values = wt2.values
 
-            current_wt1 = float(wt1_values[-1])
-            current_wt2 = float(wt2_values[-1])
+            current_wt1 = float(wt1_values[-2])
+            current_wt2 = float(wt2_values[-2])    
             
             # Check last 3 candles for signals
             signals = []
-            for i in range(1, min(4, len(wt1_values))):
-                if len(wt1_values) <= i:
-                    continue
-                    
-                wt1_curr = float(wt1_values[-i])
-                wt2_curr = float(wt2_values[-i])
-                wt1_prev = float(wt1_values[-i-1]) if len(wt1_values) > i else wt1_curr
-                wt2_prev = float(wt2_values[-i-1]) if len(wt2_values) > i else wt2_curr
+            for i in range(1, min(4, len(wt1_values) - 1)):
+                wt1_curr = float(wt1_values[-(i+1)])      # closed candle
+                wt2_curr = float(wt2_values[-(i+1)])
+                wt1_prev = float(wt1_values[-(i+2)])      # one candle before
+                wt2_prev = float(wt2_values[-(i+2)])
                 
                 # Tier-specific thresholds - Your exact settings
                 if tier_type == "HIGH_RISK":
@@ -647,7 +644,9 @@ def send_crypto_analytics_alert(coin, analysis, tier_type, cache):
     time_str, day_str = get_ist_time_12h()
     
     # Cache key
-    key = f"{tier_type}_{coin['symbol']}_{action}_{signal['candles_ago']}_{time_str}"
+    # NEW: dedupe by closed candle timestamp
+    candle_ts = ha_df.index[-2].strftime('%Y-%m-%dT%H:%M')
+    key = f"{tier_type}_{coin['symbol']}_{action}_{candle_ts}"
     if key in cache:
         return
     
