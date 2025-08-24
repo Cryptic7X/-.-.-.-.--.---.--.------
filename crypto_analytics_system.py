@@ -590,37 +590,16 @@ def get_ist_time_12h():
 
 def get_reliable_tradingview_url(symbol):
     """
-    FIXED: Get working TradingView chart URL with exchanges that have reliable data
-    Prioritizes exchanges with comprehensive TradingView integration
+    ULTRA-RELIABLE: Get TradingView chart URL without validation delays
     """
     base_symbol = symbol.upper()
     
-    # Priority order: Best TradingView integrations first
-    exchanges = [
-        ('BINANCE', f"{base_symbol}USDT"),      # Most reliable
-        ('BYBIT', f"{base_symbol}USDT"),        # Excellent coverage  
-        ('COINBASE', f"{base_symbol}USD"),      # Great for major coins
-        ('KRAKEN', f"{base_symbol}USD"),        # Reliable data
-        ('OKX', f"{base_symbol}USDT"),          # Good coverage
-        ('BINGX', f"{base_symbol}USDT.P"),      # Futures only (fallback)
-    ]
+    # Direct mapping to most reliable exchanges per symbol type
+    # Binance has the best TradingView integration
+    tv_symbol = f"BINANCE:{base_symbol}USDT"
+    url = f"https://www.tradingview.com/chart/?symbol={tv_symbol}"
     
-    for exchange, pair in exchanges:
-        # Test if the chart loads properly
-        tv_symbol = f"{exchange}:{pair}"
-        url = f"https://www.tradingview.com/chart/?symbol={tv_symbol}"
-        
-        try:
-            # Quick test to verify the URL works
-            resp = requests.head(url, timeout=2, allow_redirects=True)
-            if resp.status_code == 200:
-                return url, exchange
-        except:
-            continue
-    
-    # Ultimate fallback - Binance is most reliable
-    fallback_url = f"https://www.tradingview.com/chart/?symbol=BINANCE:{base_symbol}USDT"
-    return fallback_url, "BINANCE"
+    return url, "BINANCE"
 
 
 def send_crypto_analytics_alert(coin, analysis, tier_type, cache):
