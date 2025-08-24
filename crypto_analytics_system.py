@@ -450,7 +450,7 @@ class TrendPulseAnalyzer:
             }
 
 class CoinGeckoDataManager:
-    """CoinGecko integration for market cap filtering and coin discovery - Your Exact Implementation"""
+    """CoinGecko integration for market cap filtering and coin discovery with PAGINATION"""
     
     def __init__(self):
         self.api_calls_used = 0
@@ -473,101 +473,101 @@ class CoinGeckoDataManager:
         }
         COIN_CACHE_FILE.write_text(json.dumps(cache_data))
 
-def get_dual_tier_coins(self):
-    """Get coins from CoinGecko with PAGINATION - Your exact criteria but complete dataset"""
-    cached_coins, cache_time = self.load_cache()
-    now = datetime.utcnow()
-    
-    # Use cache if less than 30 minutes old
-    if (now - cache_time).total_seconds() < CACHE_DURATION_MINUTES * 60:
-        cache_age = (now - cache_time).total_seconds() / 60
-        print(f"🔄 Using cached CoinGecko data (age: {cache_age:.1f} min)")
-        return self.categorize_coins(cached_coins), 0
-    
-    # Fetch fresh data from CoinGecko with PAGINATION
-    print("🌐 Fetching comprehensive coin data from CoinGecko (multiple pages)...")
-    api_key = os.environ.get('COINGECKO_API_KEY', '')
-    url = "https://api.coingecko.com/api/v3/coins/markets"
-    headers = {'x-cg-demo-api-key': api_key} if api_key else {}
-    
-    all_coins = []
-    page = 1
-    max_pages = 5  # Fetch up to 1250 coins (5 pages × 250 coins)
-    api_calls = 0
-    
-    try:
-        while page <= max_pages:
-            params = {
-                'vs_currency': 'usd',
-                'order': 'market_cap_desc',
-                'per_page': 250,  # Maximum allowed
-                'page': page,
-            }
-            
-            print(f"  📄 Fetching CoinGecko page {page}...")
-            r = requests.get(url, params=params, headers=headers, timeout=20)
-            r.raise_for_status()
-            data = r.json()
-            api_calls += 1
-            
-            if not data or len(data) == 0:
-                break  # No more data
-            
-            all_coins.extend(data)
-            page += 1
-            
-            # Small delay between pages to respect rate limits
-            if page <= max_pages:
-                time.sleep(0.2)
+    def get_dual_tier_coins(self):
+        """Get coins from CoinGecko with PAGINATION - Complete dataset coverage"""
+        cached_coins, cache_time = self.load_cache()
+        now = datetime.utcnow()
         
-        print(f"✅ CoinGecko: Fetched {len(all_coins)} total coins from {api_calls} pages")
+        # Use cache if less than 30 minutes old
+        if (now - cache_time).total_seconds() < CACHE_DURATION_MINUTES * 60:
+            cache_age = (now - cache_time).total_seconds() / 60
+            print(f"🔄 Using cached CoinGecko data (age: {cache_age:.1f} min)")
+            return self.categorize_coins(cached_coins), 0
         
-        # Apply your exact filtering criteria
-        filtered = []
-        stablecoins = {'USDT', 'USDC', 'DAI', 'BUSD', 'USDE', 'FDUSD'}
+        # Fetch fresh data from CoinGecko with PAGINATION
+        print("🌐 Fetching comprehensive coin data from CoinGecko (multiple pages)...")
+        api_key = os.environ.get('COINGECKO_API_KEY', '')
+        url = "https://api.coingecko.com/api/v3/coins/markets"
+        headers = {'x-cg-demo-api-key': api_key} if api_key else {}
         
-        for coin in all_coins:
-            market_cap = coin.get('market_cap', 0) or 0
-            volume_24h = coin.get('total_volume', 0) or 0
-            current_price = coin.get('current_price', 0) or 0
-            
-            # Your exact dual-tier filtering criteria
-            high_risk_qualified = (market_cap >= 10_000_000 and 
-                                 market_cap < 500_000_000 and 
-                                 volume_24h >= 10_000_000)
-            
-            standard_qualified = (market_cap >= 500_000_000 and 
-                                volume_24h >= 30_000_000)
-            
-            if ((high_risk_qualified or standard_qualified) and 
-                coin['symbol'].upper() not in stablecoins):
+        all_coins = []
+        page = 1
+        max_pages = 5  # Fetch up to 1250 coins (5 pages × 250 coins)
+        api_calls = 0
+        
+        try:
+            while page <= max_pages:
+                params = {
+                    'vs_currency': 'usd',
+                    'order': 'market_cap_desc',
+                    'per_page': 250,  # Maximum allowed
+                    'page': page,
+                }
                 
-                filtered.append({
-                    'id': coin['id'],
-                    'symbol': coin['symbol'].upper(),
-                    'name': coin['name'],
-                    'market_cap': market_cap,
-                    'total_volume': volume_24h,
-                    'current_price': current_price,
-                    'price_change_24h': coin.get('price_change_percentage_24h', 0)
-                })
-        
-        self.save_cache(filtered)
-        self.api_calls_used += api_calls
-        
-        categorized = self.categorize_coins(filtered)
-        print(f"✅ CoinGecko: HIGH RISK: {len(categorized['high_risk'])} coins")
-        print(f"✅ CoinGecko: STANDARD: {len(categorized['standard'])} coins")
-        print(f"📊 Total qualified coins: {len(filtered)} (from {len(all_coins)} fetched)")
-        
-        return categorized, api_calls
-        
-    except Exception as e:
-        print(f"❌ CoinGecko error: {e}")
-        return self.categorize_coins(cached_coins), 0
+                print(f"  📄 Fetching CoinGecko page {page}...")
+                r = requests.get(url, params=params, headers=headers, timeout=20)
+                r.raise_for_status()
+                data = r.json()
+                api_calls += 1
+                
+                if not data or len(data) == 0:
+                    break  # No more data
+                
+                all_coins.extend(data)
+                page += 1
+                
+                # Small delay between pages to respect rate limits
+                if page <= max_pages:
+                    time.sleep(0.2)
+            
+            print(f"✅ CoinGecko: Fetched {len(all_coins)} total coins from {api_calls} pages")
+            
+            # Apply your exact filtering criteria
+            filtered = []
+            stablecoins = {'USDT', 'USDC', 'DAI', 'BUSD', 'USDE', 'FDUSD'}
+            
+            for coin in all_coins:
+                market_cap = coin.get('market_cap', 0) or 0
+                volume_24h = coin.get('total_volume', 0) or 0
+                current_price = coin.get('current_price', 0) or 0
+                
+                # Your exact dual-tier filtering criteria
+                high_risk_qualified = (market_cap >= 10_000_000 and 
+                                     market_cap < 500_000_000 and 
+                                     volume_24h >= 10_000_000)
+                
+                standard_qualified = (market_cap >= 500_000_000 and 
+                                    volume_24h >= 30_000_000)
+                
+                if ((high_risk_qualified or standard_qualified) and 
+                    coin['symbol'].upper() not in stablecoins):
+                    
+                    filtered.append({
+                        'id': coin['id'],
+                        'symbol': coin['symbol'].upper(),
+                        'name': coin['name'],
+                        'market_cap': market_cap,
+                        'total_volume': volume_24h,
+                        'current_price': current_price,
+                        'price_change_24h': coin.get('price_change_percentage_24h', 0)
+                    })
+            
+            self.save_cache(filtered)
+            self.api_calls_used += api_calls
+            
+            categorized = self.categorize_coins(filtered)
+            print(f"✅ CoinGecko: HIGH RISK: {len(categorized['high_risk'])} coins")
+            print(f"✅ CoinGecko: STANDARD: {len(categorized['standard'])} coins")
+            print(f"📊 Total qualified coins: {len(filtered)} (from {len(all_coins)} fetched)")
+            
+            return categorized, api_calls
+            
+        except Exception as e:
+            print(f"❌ CoinGecko error: {e}")
+            return self.categorize_coins(cached_coins), 0
 
     def categorize_coins(self, all_coins):
-        """Separate coins into HIGH RISK and STANDARD tiers - Your Exact Logic"""
+        """Separate coins into HIGH RISK and STANDARD tiers"""
         high_risk = []
         standard = []
         
