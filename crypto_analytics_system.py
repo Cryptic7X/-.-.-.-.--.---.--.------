@@ -590,16 +590,37 @@ def get_ist_time_12h():
 
 def get_reliable_tradingview_url(symbol):
     """
-    ULTRA-RELIABLE: Get TradingView chart URL without validation delays
+    UPDATED: Get reliable TradingView chart URL with Bybit prioritized
+    Bybit has excellent TradingView integration and broad coin coverage
     """
     base_symbol = symbol.upper()
     
-    # Direct mapping to most reliable exchanges per symbol type
-    # Binance has the best TradingView integration
-    tv_symbol = f"BINANCE:{base_symbol}USDT"
-    url = f"https://www.tradingview.com/chart/?symbol={tv_symbol}"
+    # NEW Priority order: Bybit -> Binance -> OKX -> Coinbase -> BingX
+    exchanges = [
+        ('BYBIT', f"{base_symbol}USDT"),        # Excellent coverage + reliable data
+        ('BINANCE', f"{base_symbol}USDT"),      # Good fallback
+        ('OKX', f"{base_symbol}USDT"),          # Great altcoin coverage
+        ('COINBASE', f"{base_symbol}USD"),      # Major coins only
+        ('KUCOIN', f"{base_symbol}USDT"),       # Good altcoin selection
+        ('BINGX', f"{base_symbol}USDT"),        # Original (limited data)
+    ]
     
-    return url, "BINANCE"
+    for exchange, pair in exchanges:
+        tv_symbol = f"{exchange}:{pair}"
+        url = f"https://www.tradingview.com/chart/?symbol={tv_symbol}"
+        
+        try:
+            # Quick test to verify the URL works
+            resp = requests.head(url, timeout=2, allow_redirects=True)
+            if resp.status_code == 200:
+                return url, exchange
+        except:
+            continue
+    
+    # Ultimate fallback - Bybit is most reliable for altcoins
+    fallback_url = f"https://www.tradingview.com/chart/?symbol=BYBIT:{base_symbol}USDT"
+    return fallback_url, "BYBIT"
+
 
 
 def send_crypto_analytics_alert(coin, analysis, tier_type, cache):
